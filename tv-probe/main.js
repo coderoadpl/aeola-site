@@ -13,6 +13,7 @@ let renderMilliseconds = 0
 let renderedFrames = 0
 let chromiumVersion = 0
 let tizenVersion = 0
+let statusKey = null
 
 function t(key) {
   return strings[key].localizations[language].stringUnit.value
@@ -53,7 +54,14 @@ function localize() {
   document.documentElement.lang = language
   document.querySelectorAll('[data-l10n]').forEach(element => { element.textContent = t(element.dataset.l10n) })
   document.title = t('title')
+  if (checks.userAgent.passed !== null) checks.userAgent.detail = t(checks.userAgent.passed ? 'samsungTizen' : 'otherBrowser')
+  if (statusKey) elements.status.textContent = t(statusKey)
   showChecks()
+}
+
+function setStatus(key) {
+  statusKey = key
+  elements.status.textContent = t(key)
 }
 
 async function fetchBytes(path) {
@@ -160,7 +168,7 @@ async function runChecks() {
   } catch (error) {
     setCheck('engine', false, String(error))
   }
-  elements.status.textContent = checks.engine.passed ? t('ready') : t('unsupported')
+  setStatus(checks.engine.passed ? 'ready' : 'unsupported')
 }
 
 function updateMeter() {
@@ -173,6 +181,7 @@ function updateMeter() {
   elements['meter-value'].textContent = `${percent}%`
   active.node.port.postMessage({ type: 'stats' })
   const elapsed = Math.min(durationSeconds, Math.floor((performance.now() - active.started) / 1000))
+  statusKey = null
   elements.status.textContent = `${elapsed} / ${durationSeconds} ${t('duration')}`
 }
 
@@ -186,21 +195,21 @@ async function stopPlayback(finished = false) {
   active = null
   session.node.disconnect()
   await session.context.close()
-  elements.status.textContent = t(finished ? 'finished' : 'stopped')
+  setStatus(finished ? 'finished' : 'stopped')
   code()
 }
 
 async function play(scene) {
   if (active) await stopPlayback()
   if (!checks.worklet.passed || !checks.wasm.passed || !checks.engine.passed) {
-    elements.status.textContent = t('unsupported')
+    setStatus('unsupported')
     return
   }
   let context
   try {
     context = new AudioContext({ sampleRate: 48000 })
     await context.resume()
-    elements.status.textContent = t('loading')
+    setStatus('loading')
     scenePlayed = scene === 3 ? 'R' : 'F'
     xruns = 0
     errors = 0
@@ -223,6 +232,7 @@ async function play(scene) {
     updateMeter()
   } catch (error) {
     recordError(error)
+    statusKey = null
     elements.status.textContent = String(error)
     if (context && context.state !== 'closed') await context.close()
   }
@@ -232,7 +242,7 @@ async function start() {
   strings = await (await fetch('Localizable.xcstrings')).json().then(catalog => catalog.strings)
   localize()
   elements.rain.focus()
-  elements.status.textContent = t('waiting')
+  setStatus('waiting')
   elements.rain.addEventListener('click', () => play(3))
   elements.forest.addEventListener('click', () => play(6))
   elements.stop.addEventListener('click', () => stopPlayback())
