@@ -1,0 +1,37 @@
+:root { color-scheme: dark; font-family: Arial, Helvetica, sans-serif; background: #101926; color: #f5f8fc; font-size: clamp(20px, 2.15vw, 30px) }
+* { box-sizing: border-box }
+body { margin: 0; padding: 1.2vw 4vw }
+main { max-width: 1800px; margin: auto; display: grid; grid-template-columns: 1.2fr 1fr; gap: .5em .7em }
+header, .instructions { grid-column: 1 / -1 }
+header { display: flex; justify-content: space-between; align-items: start; gap: 2rem }
+h1 { margin: 0; font-size: 2em }
+h2 { margin: 0 0 .5em; font-size: 1.25em }
+p { margin: .25em 0 }
+header p, .instructions, .agent { color: #b8cadc }
+.instructions { margin: 0 }
+.code { background: #203b56; border: 3px solid #6fb8ee; border-radius: 16px; padding: .35em .6em; min-width: 9em; text-align: center }
+.code span, .code strong { display: block }
+.code strong { font: bold 1.4em ui-monospace, monospace; letter-spacing: .08em; white-space: nowrap }
+section { background: #192b3e; border-radius: 20px; padding: .55em .8em; margin: 0 }
+.checks { display: grid; grid-template-columns: 1fr; gap: .2em }
+.check { display: flex; gap: .5em; align-items: baseline; min-width: 0 }
+.check strong { display: inline-block; flex: none; min-width: 3.5em }
+.check .detail { color: #bad0e2; font-size: .76em; overflow-wrap: anywhere }
+.pass strong { color: #8de6a8 }
+.fail strong { color: #ff9b9b }
+.pending strong { color: #ffe3a3 }
+.agent { font-size: .65em; overflow-wrap: anywhere; margin-top: .5em }
+.actions { display: grid; grid-template-columns: 1fr 1fr; gap: .4em }
+button { border: 3px solid #81bee9; border-radius: 14px; padding: .3em .65em; background: #254b6b; color: white; font: bold 1.05em Arial, sans-serif; min-height: 2.4em; cursor: pointer }
+button:focus, button:focus-visible { outline: 7px solid #fff6a0; outline-offset: 4px; background: #3979a7 }
+button:disabled { opacity: .6 }
+.status { min-height: 1.5em; margin: .4em 0; font-weight: bold }
+.meter { display: flex; gap: .5em; align-items: center }
+.meter-track { flex: 1; height: .75em; background: #365168; border-radius: 100px; overflow: hidden }
+#meter-fill { width: 0; height: 100%; background: #89e7a7 }
+.meter strong { min-width: 3em; text-align: right }
+.measurements { display: grid; gap: .3em; margin-top: .4em }
+.measurements div { display: flex; gap: .4em; align-items: baseline }
+.measurements strong { color: #fff6a0 }
+.error-detail { color: #ffaaaa; font-size: .7em; overflow-wrap: anywhere; max-height: 2.5em; overflow: hidden }
+@media (max-width: 1000px) { main { display: block } header { flex-wrap: wrap } section { margin-top: .7em } }
