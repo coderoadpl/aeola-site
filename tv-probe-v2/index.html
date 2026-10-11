@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aeola TV probe</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="main.js" type="module"></script>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1 data-l10n="title">Aeola TV probe</h1>
+        <p data-l10n="subtitle"></p>
+      </div>
+      <div class="code"><span data-l10n="result"></span><strong id="result-code">--------</strong></div>
+    </header>
+    <p class="instructions" data-l10n="instructions"></p>
+    <section>
+      <h2 data-l10n="checks"></h2>
+      <div id="checks" class="checks"></div>
+      <p id="agent" class="agent"></p>
+    </section>
+    <section>
+      <h2 data-l10n="playback"></h2>
+      <div class="actions">
+        <button id="rain" data-l10n="rain" autofocus></button>
+        <button id="forest" data-l10n="forest"></button>
+        <button id="fireplace" data-l10n="fireplace"></button>
+        <button id="synths" data-l10n="synths"></button>
+        <button id="stop" data-l10n="stop"></button>
+        <button id="language" data-l10n="language"></button>
+      </div>
+      <div id="status" class="status" aria-live="polite"></div>
+      <div class="meter"><span data-l10n="level"></span><div class="meter-track"><div id="meter-fill"></div></div><strong id="meter-value">0%</strong></div>
+      <div class="measurements">
+        <div><span data-l10n="benchmark"></span><strong id="benchmark-value">—</strong></div>
+        <div><span data-l10n="outputPath"></span><strong id="path-value">—</strong></div>
+        <div><span data-l10n="render"></span><strong id="render-value">—</strong></div>
+        <div><span data-l10n="xruns"></span><strong id="xruns-value">0</strong></div>
+        <div><span data-l10n="errors"></span><strong id="errors-value">0</strong></div>
+      </div>
+      <p id="error-detail" class="error-detail"></p>
+    </section>
+  </main>
+</body>
+</html>
