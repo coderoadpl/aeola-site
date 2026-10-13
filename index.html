@@ -1,9 +1,41 @@
 <!doctype html>
 <html lang="en">
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Aeola</title>
-<style>body{font:17px/1.6 -apple-system,system-ui,sans-serif;background:#0b1020;color:#e8ecf5;max-width:640px;margin:15vh auto;padding:0 24px}a{color:#8fd3c6}</style>
-<h1>Aeola: Generative Soundscapes</h1>
-<p>Sound made live for focus, relaxation and sleep.</p>
-<p><a href="privacy/">Privacy Policy / Polityka prywatności</a> · <a href="support/">Support / Pomoc</a></p>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0a1719">
+  <title></title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="mood-field" aria-hidden="true"><div class="orb orb-one"></div><div class="orb orb-two"></div><div class="grain"></div></div>
+  <header class="topbar">
+    <a class="brand" href="./"><span class="brand-mark"><i></i><i></i><i></i></span><strong></strong></a>
+    <nav class="toplinks" aria-label="Site"><a id="privacy" href="https://coderoadpl.github.io/aeola-site/privacy/" target="_blank" rel="noopener noreferrer"></a><a id="support" href="https://coderoadpl.github.io/aeola-site/support/" target="_blank" rel="noopener noreferrer"></a></nav>
+    <div class="download"><span class="download-label" id="download-label"></span><span id="app-store" class="store-coming"></span><span id="google-play" class="store-coming"></span></div>
+    <div class="tv-size" id="tv-size-label"><span id="tv-size-title"></span><div id="tv-size"></div></div>
+    <div class="language" role="group" aria-label="Language"><button id="lang-en" type="button">EN</button><button id="lang-pl" type="button">PL</button></div>
+  </header>
+  <main class="app-shell" id="app-shell" data-mood="focus">
+    <section class="controls-panel" aria-label="Scenes">
+      <div class="session-tools"><button id="time-trigger" type="button"><span id="time-icon"></span><span id="time-status"></span></button><div class="session-actions"><button id="visualizer-shortcut" type="button"></button><button id="sleep-timer" type="button"></button></div></div>
+      <div class="scene-heading"><span class="eyebrow" id="scene-label"></span></div>
+      <div class="scene-grid" id="scene-grid"></div>
+      <div class="sub-scenes" id="sub-scenes"></div>
+      <div class="controls-body" id="controls-body"></div>
+    </section>
+    <div class="column-divider" aria-hidden="true"></div>
+    <section class="hero">
+      <div class="hero-inner"><div class="eyebrow hero-eyebrow" id="hero-eyebrow"></div><div class="hero-title-row"><span class="hero-icon" id="hero-icon"></span><h1 id="hero-title"></h1></div><p class="hero-summary" id="hero-summary"></p><div class="band"><svg viewBox="0 0 900 180" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="band-back" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#a896ff" stop-opacity=".58"/><stop offset="1" stop-color="#9b84f8" stop-opacity="0"/></linearGradient><linearGradient id="band-front" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#83d9f4" stop-opacity=".52"/><stop offset="1" stop-color="#73caf3" stop-opacity="0"/></linearGradient></defs><path class="wave-fill wave-fill-back" d="M0 90H900Z"/><path class="wave-fill wave-fill-front" d="M0 90H900Z"/><path class="wave wave-back" d="M0 90H900"/><path class="wave wave-front" d="M0 90H900"/></svg><div class="spectrum-bars" aria-hidden="true"></div><button class="transport" id="transport" type="button" aria-label="Play"><span id="transport-icon"></span></button></div><div class="hero-caption"><button type="button" id="layers" class="soft-button"><span id="layers-label"></span><span id="layers-chevron" aria-hidden="true"></span></button><span id="session-status" role="status"></span><button id="band-toggle" type="button" aria-expanded="true"></button></div><div id="timer-status" hidden></div><div class="volume-row"><span id="volume-low"></span><input type="range" id="volume" min="0" max="100" value="75"><span id="volume-high"></span></div></div>
+    </section>
+  </main>
+  <div class="sr-only" id="scene-announcer" role="status"></div>
+  <div id="device-notice" class="device-notice" hidden><span id="device-notice-text"></span><button id="device-notice-close" type="button"></button></div>
+  <dialog id="layers-dialog"><div class="dialog-head"><h2 id="layers-title"></h2><button id="layers-close" type="button"></button></div><div id="layers-list"></div></dialog>
+  <dialog id="credits-dialog"><div class="dialog-head"><h2 id="credits-title"></h2><button id="credits-close" type="button"></button></div><div id="credits-list"></div></dialog>
+  <dialog id="info-dialog"><div class="dialog-head"><h2 id="info-title"></h2><button id="info-close" type="button"></button></div><p id="info-body"></p></dialog>
+  <dialog id="time-dialog"><div class="dialog-head"><h2 id="time-title"></h2><button id="time-close" type="button"></button></div><p id="time-body"></p></dialog>
+  <footer class="site-footer"><button class="credits-trigger" id="credits-trigger" type="button"></button><div class="legal" id="legal"></div><nav class="footer-links" aria-label="Site"><a href="https://coderoadpl.github.io/aeola-site/privacy/" target="_blank" rel="noopener noreferrer" id="footer-privacy"></a><a href="https://coderoadpl.github.io/aeola-site/support/" target="_blank" rel="noopener noreferrer" id="footer-support"></a></nav></footer>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
