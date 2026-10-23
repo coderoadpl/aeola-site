@@ -57,6 +57,16 @@ export class CoreState {
     return new Uint8Array(new Uint8Array(this.memory.buffer, pointer, length))
   }
 
+  visualFrame(signal, time, transportDiameter, reduceMotion) {
+    new Float64Array(this.memory.buffer, this.exports.aeola_web_visual_signal_buffer(), signal.length).set(signal)
+    const count = this.exports.aeola_web_visual_frame(time, transportDiameter, reduceMotion ? 1 : 0)
+    return count > 0 ? new Float64Array(this.memory.buffer, this.exports.aeola_web_visual_frame_buffer(), count) : null
+  }
+
+  resetVisual() {
+    this.exports.aeola_web_visual_reset()
+  }
+
   benchmark() {
     const milliseconds = this.exports.aeola_web_benchmark(48000)
     return { milliseconds, performanceClass: this.exports.aeola_web_benchmark_class(milliseconds) }

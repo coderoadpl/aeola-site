@@ -8,7 +8,7 @@ const icon = name => icons[symbolIcons[name] || name] || icons.sparkles
 const store = {
   volume: Number(localStorage.getItem('aeola.volume') ?? 75),
   language: localStorage.getItem('aeola.language') || (navigator.language.startsWith('pl') ? 'pl' : 'en'),
-  visualizerMode: localStorage.getItem('aeola.visualizerMode') || 'waveform'
+  visualizerMode: localStorage.getItem('aeola.visualizerMode') || 'layers'
 }
 const $ = id => document.getElementById(id)
 const persist = (key, value) => localStorage.setItem(`aeola.${key}`, String(value))
@@ -36,12 +36,18 @@ let sleepDeadline = 0
 let sleepFading = false
 let visualizerFrame = 0
 let visualizerTime = 0
+let visualSampleTime = 0
+let auraTime = 0
+const auraFramesPerSecond = 15
+const canvasSizes = new Map()
+let transportDiameterCache = 0
+const measuredVisualizerModes = ['layers', 'waveform', 'spectrum']
 let visualizerValues = null
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)')
 const coarsePointer = matchMedia('(pointer: coarse)')
 const tvMode = /Tizen/i.test(navigator.userAgent) || new URLSearchParams(location.search).get('tv') === '1'
 const tvScales = { compact: 0.88, standard: 1, large: 1.2 }
-let bandCollapsed = false
+let bandExpanded = false
 let weakDeviceNotice = false
 let scenesRenderKey = ''
 let controlsRenderKey = ''
@@ -54,6 +60,7 @@ function t(key) {
   }
   return strings[key]?.[store.language] || String(key)
 }
+function measurableVisualizerModes() { return (state?.visualizerTabs || []).filter(tab => measuredVisualizerModes.includes(tab)) }
 function capitalized(value) { return value ? value[0].toLocaleUpperCase(store.language === 'pl' ? 'pl-PL' : 'en-US') + value.slice(1) : value }
 function scene(id) { return state?.scenes.find(item => item.id === id) }
 function groups() { return (state?.groups || []).map(group => ({ ...group, members: group.members.filter(id => scene(id)?.available) })).filter(group => group.members.length) }
@@ -124,11 +131,6 @@ function render() {
   setText('time-title', t('What time of day changes'))
   setText('time-body', t('Time of day info'))
   setText('time-close', t('Close'))
-  for (const [id, name, label] of [['visualizer-shortcut', 'activity', 'Visualizer']]) {
-    $(id).innerHTML = icon(name)
-    $(id).setAttribute('aria-label', t(label))
-    $(id).title = t(label)
-  }
   if (identity?.storesLive) {
     $('app-store').querySelector('img').alt = t('Download on the App Store')
     $('google-play').querySelector('img').alt = t('Get it on Google Play')
@@ -150,18 +152,24 @@ function render() {
   const appleLegal = identity?.storesLive ? `${t('Apple and the Apple logo are trademarks of Apple Inc., registered in the U.S. and other countries.')} ${t('App Store is a service mark of Apple Inc.')}` : t('App Store is a service mark of Apple Inc.')
   const googleLegal = t(identity?.storesLive ? 'Google Play and the Google Play logo are trademarks of Google LLC.' : 'Google Play is a trademark of Google LLC.')
   setText('legal', `${appleLegal} ${googleLegal} ${t('Published by CodeRoad sp. z o.o.')} · kontakt@coderoad.pl`)
-  const tabs = (state?.visualizerTabs || []).filter(tab => tab === 'waveform' || tab === 'spectrum')
-  const mode = tabs.includes(store.visualizerMode) ? store.visualizerMode : 'waveform'
+  const mode = measurableVisualizerModes().includes(store.visualizerMode) ? store.visualizerMode : 'layers'
   setText('layers-label', t(mode[0].toUpperCase() + mode.slice(1)))
   requestAnimationFrame(alignSessionCaption)
   if (!$('layers-chevron').firstChild) $('layers-chevron').innerHTML = icon('chevron-down')
-  setText('layers-title', t('Visualizer mode'))
-  setText('layers-close', t('Close'))
+  $('layers').setAttribute('aria-label', t('Visualizer mode'))
+  const layersCaption = state ? t({ key: 'How loud each sound is over the last 25 seconds. Band height: %1$lld to %2$lld dB per sound.', arguments: [state.layerFloorDb, state.layerFloorDb + state.layerRangeDb] }) : ''
+  setText('history-start', mode === 'layers' && state ? t({ key: '%lld s ago', arguments: [state.layerHistoryWindow] }) : '')
+  setText('history-end', mode === 'layers' ? t('now') : '')
+  setText('visualizer-caption', mode === 'layers' ? layersCaption : '')
+  $('visualizer-caption').hidden = mode !== 'layers'
+  $('visualizer-history').setAttribute('aria-label', mode === 'layers' ? layersCaption : mode === 'spectrum' ? t('Frequency content of the master output.') : t('Waveform'))
+  $('visualizer-legend').hidden = mode !== 'layers'
+  if (document.querySelector('.band').dataset.mode !== mode) core?.resetVisual()
   document.querySelector('.band').dataset.mode = mode
-  document.querySelector('.band').classList.toggle('collapsed', bandCollapsed)
-  $('band-toggle').setAttribute('aria-expanded', String(!bandCollapsed))
-  $('band-toggle').setAttribute('aria-label', t(bandCollapsed ? 'Show visualizer' : 'Hide visualizer'))
-  $('band-toggle').innerHTML = icon(bandCollapsed ? 'chevron-down' : 'chevron-up')
+  $('visualizer-detail').hidden = !bandExpanded
+  $('band-toggle').setAttribute('aria-expanded', String(bandExpanded))
+  $('band-toggle').setAttribute('aria-label', t(bandExpanded ? 'Collapse visualizer band' : 'Expand visualizer band'))
+  $('band-toggle').innerHTML = icon(bandExpanded ? 'chevron-down' : 'chevron-up')
   $('volume-low').innerHTML = icon('volume-1')
   $('volume-high').innerHTML = icon('volume-2')
   $('volume').value = store.volume
@@ -175,6 +183,8 @@ function render() {
   }
   setText('hero-eyebrow', error ? t('Audio unavailable') : loading ? t('Loading audio…') : playing ? t('NOW PLAYING') : hasEverPlayed ? t('PAUSED') : t('READY'))
   setText('hero-title', capitalized(t(state.nowPlayingTitle)))
+  setText('hero-mood', state.moodTitle ? t(state.moodTitle) : '')
+  $('hero-mood').hidden = !state.moodTitle
   $('hero-icon').innerHTML = icon(descriptor.symbol)
   setText('hero-summary', capitalized(t(state.caption)))
   setText('session-status', error ? t('Audio unavailable') : sessionCaption())
@@ -190,6 +200,7 @@ function render() {
   const [top, bottom, orbOne, orbTwo, orbThree, orbFour, accent, onAccent] = state.palette
   const colors = { '--palette-top': top, '--palette-bottom': bottom, '--palette-orb-one': orbOne, '--palette-orb-two': orbTwo, '--palette-orb-three': orbThree, '--palette-orb-four': orbFour, '--mint': accent, '--on-accent': onAccent }
   for (const [name, color] of Object.entries(colors)) document.documentElement.style.setProperty(name, color)
+  document.querySelector('.band').style.setProperty('--aura-padding', `${state.transportAuraPadding}px`)
   document.body.classList.toggle('is-playing', playing)
   $('sleep-timer').innerHTML = icon('moon-star')
   $('sleep-timer').setAttribute('aria-label', timerCaption())
@@ -198,6 +209,7 @@ function render() {
   renderScenes()
   renderControls()
   renderLayers()
+  paintIdleVisualizer()
 }
 
 function renderLayers() {
@@ -206,12 +218,13 @@ function renderLayers() {
   layersRenderKey = key
   const list = $('layers-list')
   list.replaceChildren()
-  for (const mode of (state?.visualizerTabs || []).filter(tab => tab === 'waveform' || tab === 'spectrum')) {
+  for (const mode of measurableVisualizerModes()) {
     const label = t(mode[0].toUpperCase() + mode.slice(1))
     list.append(button(label, 'visualizer-option', store.visualizerMode === mode, () => {
       store.visualizerMode = mode
       persist('visualizerMode', mode)
-      $('layers-dialog').close()
+      list.hidden = true
+      $('layers').setAttribute('aria-expanded', 'false')
       render()
     }))
   }
@@ -477,6 +490,7 @@ async function togglePlayback() {
       playing = true
       hasEverPlayed = true
       playedAt = Date.now()
+      core.resetVisual()
       drawVisualizer()
     } else {
       gain.gain.setTargetAtTime(0, context.currentTime, 0.04)
@@ -572,27 +586,308 @@ function smoothBand(values, amplitude, offset) {
   return path
 }
 
-function drawVisualizer(time = 0) {
-  if (!playing || !analyser || bandCollapsed || document.hidden) return
-  visualizerFrame = requestAnimationFrame(drawVisualizer)
-  if (time - visualizerTime < 1000 / 30 || reducedMotion.matches) return
-  visualizerTime = time
-  const values = visualizerValues
+function latencyFrames() {
+  return Math.round(((context?.baseLatency || 0) + (context?.outputLatency || 0)) * (context?.sampleRate || 48000))
+}
+
+function transportDiameter() {
+  transportDiameterCache ||= $('transport').offsetWidth
+  return transportDiameterCache
+}
+
+function readVisualFrame(time) {
+  if (!core || !state?.visualFrameLayout) return null
+  node?.requestVisual(latencyFrames())
+  const signal = playing && node?.visual ? node.visual : new Float64Array(state.visualSignalCount)
+  return core.visualFrame(signal, time / 1000, transportDiameter(), reducedMotion.matches)
+}
+
+function canvasSize(element) {
+  const cached = canvasSizes.get(element)
+  if (cached) return cached
+  const width = element.clientWidth
+  const height = element.clientHeight
+  const ratio = window.devicePixelRatio || 1
+  const size = { width, height, scale: element.offsetWidth ? ratio * element.getBoundingClientRect().width / element.offsetWidth : ratio }
+  if (width && height) canvasSizes.set(element, size)
+  return size
+}
+
+function forgetCanvasSizes() {
+  canvasSizes.clear()
+  transportDiameterCache = 0
+  paintIdleVisualizer()
+}
+
+function fitCanvas(canvas) {
+  const { width, height, scale } = canvasSize(canvas)
+  const backingWidth = Math.round(width * scale)
+  const backingHeight = Math.round(height * scale)
+  if (canvas.width !== backingWidth || canvas.height !== backingHeight) {
+    canvas.width = backingWidth
+    canvas.height = backingHeight
+  }
+  const drawing = canvas.getContext('2d')
+  drawing.setTransform(scale, 0, 0, scale, 0, 0)
+  drawing.clearRect(0, 0, width, height)
+  return { drawing, width, height }
+}
+
+function rgba(color, alpha) {
+  const value = typeof color === 'string' ? parseInt(color.slice(1), 16) : color
+  return `rgba(${value >> 16 & 255},${value >> 8 & 255},${value & 255},${alpha})`
+}
+
+function smoothCurve(drawing, points) {
+  drawing.moveTo(points[0][0], points[0][1])
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const [x0, y0] = points[Math.max(index - 1, 0)]
+    const [x1, y1] = points[index]
+    const [x2, y2] = points[index + 1]
+    const [x3, y3] = points[Math.min(index + 2, points.length - 1)]
+    drawing.bezierCurveTo(x1 + (x2 - x0) / 6, y1 + (y2 - y0) / 6, x2 - (x3 - x1) / 6, y2 - (y3 - y1) / 6, x2, y2)
+  }
+}
+
+function drawBandWave(drawing, width, height, { level, phase, color, alpha, offset }) {
+  const samples = 80
+  const mid = height * 0.54 + offset
+  const amplitude = height * (0.06 + 0.34 * Math.max(level, 0))
+  const points = []
+  for (let index = 0; index <= samples; index += 1) {
+    const t = index / samples
+    const wave = Math.sin(t * Math.PI * 10 + phase) * 0.55 + Math.sin(t * Math.PI * 23 + phase * 0.73) * 0.30 + Math.sin(t * Math.PI * 37 + phase * 1.17) * 0.15
+    points.push([t * width, mid + wave * amplitude])
+  }
+  const baseline = Math.min(height * 0.78 + Math.max(offset, 0), height)
+  const gradient = drawing.createLinearGradient(width / 2, Math.max(mid - amplitude, 0), width / 2, baseline)
+  gradient.addColorStop(0, rgba(color, alpha * 0.58))
+  gradient.addColorStop(0.55, rgba(color, alpha * 0.20))
+  gradient.addColorStop(1, rgba(color, 0))
+  drawing.beginPath()
+  smoothCurve(drawing, points)
+  drawing.lineTo(width, baseline)
+  drawing.lineTo(0, baseline)
+  drawing.closePath()
+  drawing.fillStyle = gradient
+  drawing.fill()
+  drawing.beginPath()
+  smoothCurve(drawing, points)
+  drawing.strokeStyle = rgba(color, alpha * 0.95)
+  drawing.lineWidth = 1.2
+  drawing.stroke()
+}
+
+function drawLayerBand(frame, phase) {
+  const { drawing, width, height } = fitCanvas($('band-layers'))
+  if (!frame || !playing) return
+  const layout = state.visualFrameLayout
+  const level = name => frame[layout.bandLevels + state.visualLayers.indexOf(name)]
+  const nature = state.visualLayers[frame[layout.natureLayer]]
+  drawBandWave(drawing, width, height, { level: level(nature), phase, color: frame[layout.natureColor], alpha: 0.82, offset: 0 })
+  drawBandWave(drawing, width, height, { level: level('music'), phase: phase + 1.7, color: frame[layout.musicColor], alpha: 0.72, offset: -height * 0.08 })
+}
+
+function fillDisc(drawing, x, y, radius, stops, alpha) {
+  if (alpha <= 0 || radius <= 0) return
+  const gradient = drawing.createRadialGradient(x, y, 0, x, y, radius)
+  for (const [offset, color] of stops) gradient.addColorStop(offset, color)
+  drawing.globalAlpha = alpha
+  drawing.fillStyle = gradient
+  drawing.beginPath()
+  drawing.arc(x, y, radius, 0, Math.PI * 2)
+  drawing.fill()
+  drawing.globalAlpha = 1
+}
+
+function drawTransportAura(frame) {
+  const canvas = $('transport-aura')
+  const active = Boolean(frame) && playing && !sleepFading
+  canvas.classList.toggle('active', active)
+  if (!active) return
+  const { drawing, width, height } = fitCanvas(canvas)
+  const layout = state.visualFrameLayout
+  const [x, y] = [width / 2, height / 2]
+  const accent = frame[layout.auraColor]
+  const flash = frame[layout.flashColor]
+  fillDisc(drawing, x, y, frame[layout.glowRadius], [[0, rgba(accent, 0.9)], [0.5, rgba(accent, 0.15)], [1, rgba(accent, 0)]], frame[layout.glowAlpha])
+  if (frame[layout.flashRadius] >= 0) fillDisc(drawing, x, y, frame[layout.flashRadius], [[0, rgba(flash, 0.8)], [1, rgba(flash, 0)]], frame[layout.flashAlpha])
+  for (let index = 0; index < frame[layout.ringCount]; index += 1) {
+    const ring = layout.rings + index * layout.ringStride
+    if (frame[ring + 1] <= 0) continue
+    drawing.beginPath()
+    drawing.arc(x, y, frame[ring], 0, Math.PI * 2)
+    drawing.strokeStyle = rgba(accent, frame[ring + 1])
+    drawing.lineWidth = frame[ring + 2]
+    drawing.stroke()
+  }
+}
+
+function chartLabel(drawing, text, x, y) {
+  drawing.font = '500 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+  drawing.fillStyle = 'rgba(255,255,255,0.58)'
+  drawing.textAlign = 'center'
+  drawing.textBaseline = 'middle'
+  drawing.fillText(text, x, y)
+}
+
+function layerTitle(name) {
+  return t(name[0].toUpperCase() + name.slice(1))
+}
+
+function drawLayersChart(frame) {
+  const { drawing, width, height } = fitCanvas($('visualizer-history'))
+  const layout = state?.visualFrameLayout
+  const count = frame ? frame[layout.sampleCount] : 0
+  if (!count || count < 2 || !frame[layout.audibleCount]) {
+    chartLabel(drawing, t('Start playback to see the layers.'), width / 2, height / 2)
+    return
+  }
+  const stride = layout.sampleStride
+  const newest = frame[layout.newestTime]
+  const scale = frame[layout.stackedScale]
+  const x = index => (1 - (newest - frame[layout.samples + index * stride]) / state.layerHistoryWindow) * width
+  const bottoms = new Float64Array(count).fill(height)
+  for (const name of state.layerStackOrder) {
+    const layer = state.visualLayers.indexOf(name)
+    const level = index => frame[layout.samples + index * stride + 1 + layer] / scale * height
+    const outline = new Path2D()
+    const top = new Path2D()
+    for (let index = 0; index < count; index += 1) {
+      const y = bottoms[index] - level(index)
+      if (index === 0) { outline.moveTo(x(index), y); top.moveTo(x(index), y) } else { outline.lineTo(x(index), y); top.lineTo(x(index), y) }
+    }
+    for (let index = count - 1; index >= 0; index -= 1) {
+      outline.lineTo(x(index), bottoms[index])
+      bottoms[index] -= level(index)
+    }
+    outline.closePath()
+    drawing.fillStyle = rgba(state.layerColors[layer], 0.70)
+    drawing.fill(outline)
+    drawing.strokeStyle = state.layerColors[layer]
+    drawing.lineWidth = 1
+    drawing.stroke(top)
+  }
+}
+
+function legendItem(name) {
+  const item = document.createElement('div')
+  item.className = 'legend-item'
+  item.dataset.layer = name
+  const swatch = document.createElement('i')
+  swatch.style.background = state.layerColors[state.visualLayers.indexOf(name)]
+  const label = document.createElement('span')
+  label.textContent = layerTitle(name)
+  const level = document.createElement('span')
+  level.className = 'legend-level'
+  item.append(swatch, label, level)
+  return item
+}
+
+function renderLegend(frame) {
+  const layout = state?.visualFrameLayout
+  const layers = []
+  for (let index = 0; frame && index < frame[layout.audibleCount]; index += 1) layers.push(frame[layout.audibleLayers + index])
+  const legend = $('visualizer-legend')
+  const key = `${store.language}:${layers.join(',')}`
+  if (legend.dataset.key !== key) {
+    legend.dataset.key = key
+    legend.replaceChildren(...layers.map(layer => legendItem(state.visualLayers[layer])))
+  }
+  layers.forEach((layer, index) => {
+    const decibels = frame[layout.decibels + layer]
+    const text = Number.isNaN(decibels) ? t('off|level') : `${decibels} dB`
+    const level = legend.children[index].lastChild
+    if (level.textContent !== text) level.textContent = text
+  })
+}
+
+function drawVisualizerEmpty(mode) {
+  const { drawing, width, height } = fitCanvas($('visualizer-history'))
+  chartLabel(drawing, t(mode === 'spectrum' ? 'Start playback to see the spectrum.' : 'Start playback to see the waveform.'), width / 2, height / 2)
+}
+
+function paintIdleVisualizer() {
+  if (playing || !core || !state?.visualFrameLayout) return
+  const frame = readVisualFrame(performance.now())
+  drawLayerBand(frame, 0)
+  drawTransportAura(frame)
+  if (!bandExpanded) return
   const mode = document.querySelector('.band').dataset.mode
+  if (mode !== 'layers') {
+    drawVisualizerEmpty(mode)
+    return
+  }
+  drawLayersChart(frame)
+  renderLegend(frame)
+}
+
+function drawVisualizer(time = 0) {
+  if (!playing || document.hidden) return
+  visualizerFrame = requestAnimationFrame(drawVisualizer)
+  const mode = document.querySelector('.band').dataset.mode
+  const drawDue = time - visualizerTime >= 1000 / (reducedMotion.matches ? 4 : 30)
+  const sampleDue = mode === 'layers' && bandExpanded && time - visualSampleTime >= state.layerSampleInterval * 1000
+  if (!drawDue && !sampleDue) return
+  visualSampleTime = time
+  const frame = readVisualFrame(time)
+  if (!drawDue) return
+  visualizerTime = time
+  if (time - auraTime >= 1000 / auraFramesPerSecond) {
+    auraTime = time
+    drawTransportAura(frame)
+  }
+  if (mode === 'layers') {
+    drawLayerBand(frame, reducedMotion.matches ? 0 : time / 1000 * 0.9)
+    if (bandExpanded) {
+      drawLayersChart(frame)
+      renderLegend(frame)
+    }
+    return
+  }
+  if (!analyser) return
+  const values = visualizerValues
   if (mode === 'spectrum') {
     analyser.getByteFrequencyData(values)
+    if (bandExpanded) drawAnalyserDetail(values, true)
+    if (reducedMotion.matches) return
     document.querySelectorAll('.spectrum-bars i').forEach((bar, index) => {
       bar.style.height = `${Math.max(2, values[Math.min(values.length - 1, index * 4)] / 255 * 75)}px`
     })
     return
   }
   analyser.getByteTimeDomainData(values)
+  if (bandExpanded) drawAnalyserDetail(values, false)
+  if (reducedMotion.matches) return
   const back = smoothBand(values, mode === 'waveform' ? 0.4 : 0.7, -8)
   const front = smoothBand(values, mode === 'waveform' ? 0.65 : 0.9, 8)
   document.querySelector('.wave-back').setAttribute('d', back)
   document.querySelector('.wave-front').setAttribute('d', front)
   document.querySelector('.wave-fill-back').setAttribute('d', `${back} L900 180 H0 Z`)
   document.querySelector('.wave-fill-front').setAttribute('d', `${front} L900 180 H0 Z`)
+}
+
+function drawAnalyserDetail(values, frequency) {
+  const { drawing, width, height } = fitCanvas($('visualizer-history'))
+  const accent = getComputedStyle(document.documentElement).getPropertyValue('--mint').trim() || '#76e6c2'
+  if (frequency) {
+    drawing.fillStyle = rgba(accent, 0.75)
+    for (let index = 0; index < 60; index += 1) {
+      const level = values[Math.min(values.length - 1, index * 4)] / 255
+      drawing.fillRect(index * width / 60, height * (1 - level), width / 70, height * level)
+    }
+    return
+  }
+  drawing.strokeStyle = accent
+  drawing.lineWidth = 1.5
+  drawing.beginPath()
+  for (let index = 0; index < values.length; index += 1) {
+    const x = index / (values.length - 1) * width
+    const y = (1 - values[index] / 255) * height
+    if (index === 0) drawing.moveTo(x, y)
+    else drawing.lineTo(x, y)
+  }
+  drawing.stroke()
 }
 
 function updateClock() {
@@ -649,6 +944,7 @@ async function start() {
     const sizeButtons = segmented(sizeChoices.map(([value, key]) => [value, t(key)]), selectedSize, size => {
       persist('tvSize', size)
       document.documentElement.style.setProperty('--tv-scale', tvScales[size])
+      forgetCanvasSizes()
       for (const button of $('tv-size').querySelectorAll('button')) {
         const active = button.id === `tv-size-${size}`
         button.classList.toggle('selected', active)
@@ -666,19 +962,21 @@ async function start() {
   $('time-close').onclick = () => $('time-dialog').close()
   $('device-notice-close').onclick = () => { weakDeviceNotice = false; $('device-notice').hidden = true }
   $('info-close').onclick = () => $('info-dialog').close()
-  $('visualizer-shortcut').onclick = () => $('layers-dialog').showModal()
   $('credits-trigger').onclick = () => $('credits-dialog').showModal()
   $('credits-close').onclick = () => $('credits-dialog').close()
-  $('layers').onclick = () => $('layers-dialog').showModal()
+  $('layers').onclick = () => { $('layers-list').hidden = !$('layers-list').hidden; $('layers').setAttribute('aria-expanded', String(!$('layers-list').hidden)) }
+  const canvasResize = new ResizeObserver(forgetCanvasSizes)
+  for (const id of ['band-layers', 'transport-aura', 'visualizer-history', 'transport']) canvasResize.observe($(id))
+  window.addEventListener('resize', forgetCanvasSizes)
   const captionControls = new ResizeObserver(alignSessionCaption)
   captionControls.observe($('layers'))
   captionControls.observe($('band-toggle'))
-  $('band-toggle').onclick = () => { bandCollapsed = !bandCollapsed; if (bandCollapsed) cancelAnimationFrame(visualizerFrame); else if (playing) drawVisualizer(); render() }
-  $('layers-close').onclick = () => $('layers-dialog').close()
+  $('band-toggle').onclick = () => { bandExpanded = !bandExpanded; $('layers-list').hidden = true; $('layers').setAttribute('aria-expanded', 'false'); render() }
   document.addEventListener('keydown', async event => {
     if (event.key === 'Escape' || event.keyCode === 10009) {
       const dialog = document.querySelector('dialog[open]')
       if (dialog) { event.preventDefault(); dialog.close() }
+      else if (!$('layers-list').hidden) { event.preventDefault(); $('layers-list').hidden = true; $('layers').setAttribute('aria-expanded', 'false') }
       else if (event.keyCode === 10009 && window.tizen?.application) {
         event.preventDefault()
         if (playing) await togglePlayback()

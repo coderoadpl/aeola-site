@@ -55,6 +55,7 @@ export class BufferedAudio {
         if (data.type === 'ready') { clearTimeout(timeout); this.benchmark = data.benchmark; resolve() }
         if (data.type === 'error') { clearTimeout(timeout); reject(new Error(data.message)); this.onerror?.(data.message) }
         if (data.type === 'stats') { this.workerStats = data; this.resolveStats() }
+        if (data.type === 'visual') this.visual = data.values
       }
       this.node.port.onmessage = event => {
         if (event.data.type === 'stats') { this.outputStats = event.data; this.resolveStats() }
@@ -83,6 +84,7 @@ export class BufferedAudio {
   }
 
   set(name, value) { this.worker.postMessage({type:'control',name,value}) }
+  requestVisual(latencyFrames) { this.worker?.postMessage({ type: 'visual', latencyFrames }) }
   close() {
     this.node?.disconnect()
     this.node?.port.close()

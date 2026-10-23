@@ -50,6 +50,17 @@ async function fill() {
   } finally { busy = false }
 }
 
+function consumedFrames() {
+  if (header) return renderedFrames - ((Atomics.load(header, 1) - Atomics.load(header, 0)) >>> 0)
+  return renderedFrames - (settings.poolSize - recycled.length) * blockFrames
+}
+
+function visual(latencyFrames) {
+  const count = core.exports.aeola_web_visual_signal(Math.max(0, consumedFrames() - latencyFrames))
+  const values = new Float64Array(new Float64Array(core.memory.buffer, core.exports.aeola_web_visual_signal_buffer(), count))
+  self.postMessage({ type: 'visual', values }, [values.buffer])
+}
+
 function fail(error) {
   stopped = true
   clearInterval(timer)
@@ -106,6 +117,8 @@ self.onmessage = async event => {
       }, 10)
     } else if (data.type === 'stats') {
       self.postMessage({ type: 'stats', renderMilliseconds, renderedFrames, benchmark, wasmBytes: core.memory.buffer.byteLength })
+    } else if (data.type === 'visual') {
+      if (timer && !stopped) visual(data.latencyFrames)
     } else if (data.type === 'control') {
       if (core.set(data.name, data.value) !== 0) throw new Error(`Invalid control: ${data.name}`)
     }
